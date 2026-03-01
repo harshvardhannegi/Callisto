@@ -6,11 +6,10 @@ import {
   type Interaction,
 } from "discord.js";
 import { Client, MetadataStorage } from "discordx";
-import { config } from "./config";
+import { config } from "./utils/config";
 import { importx, dirname } from "@discordx/importer";
 import chalk from "chalk";
 import dotenv from "dotenv";
-
 dotenv.config({
   quiet: true,
 });
@@ -38,7 +37,7 @@ const client = new Client({
 });
 
 async function start() {
-  await importx(`${dirname(import.meta.url)}/{commands,events}/*.{ts,js}`);
+  await importx(`${dirname(import.meta.url)}/{commands,events}/**/*.{ts,js}`);
 
   if (!process.env.BOT_TOKEN) {
     console.error("BOT_TOKEN missing");
