@@ -31,10 +31,6 @@ export class Kick {
       return KickResult.CANNOT_KICK;
     }
 
-    if (attacker.roles.highest.comparePositionTo(victim.roles.highest) <= 0) {
-      return KickResult.CANNOT_KICK;
-    }
-
     if (!victim.kickable) {
       return KickResult.CANNOT_KICK;
     }
@@ -56,7 +52,7 @@ export class Kick {
       case KickResult.ERROR:
         return ":x: An error occurred while kicking.";
       case KickResult.SUCCESS:
-        return `✅ Successfully kicked '${username}'!`;
+        return `✅ Successfully kicked \`${username}\`!`;
     }
   }
 
