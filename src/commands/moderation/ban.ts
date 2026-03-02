@@ -28,6 +28,7 @@ export class Ban {
     attacker: GuildMember,
     victim: GuildMember,
     reason: string,
+    deletePreviousMessages: number,
   ): Promise<BanResult> {
     if (attacker.id === victim.id) {
       return BanResult.CANNOT_BAN;
@@ -45,11 +46,28 @@ export class Ban {
     if (existing) return BanResult.ALREADY_BANNED;
 
     try {
-      await victim.ban({ reason });
+      await victim.ban({
+        reason: reason,
+        deleteMessageSeconds: deletePreviousMessages,
+      });
       return BanResult.SUCCESS;
     } catch {
       return BanResult.ERROR;
     }
+  }
+
+  private calculateToSeconds(
+    value: number,
+    unit: "s" | "m" | "h" | "d",
+  ): number {
+    const multipliers = {
+      s: 1,
+      m: 60,
+      h: 3600,
+      d: 86400,
+    };
+
+    return value * multipliers[unit];
   }
 
   private getMessage(result: BanResult, username: string): string {
@@ -67,6 +85,34 @@ export class Ban {
     }
   }
 
+  private parseDuration(
+    input?: string,
+  ): { seconds: number } | { error: string } {
+    if (!input) return { seconds: 0 };
+
+    const match = input
+      .trim()
+      .toLowerCase()
+      .match(/^(\d+)([smhd])$/);
+
+    if (!match) {
+      return { error: "Invalid duration format. Use 7d, 3h, 10m, 5s" };
+    }
+
+    const value = Number(match[1]);
+    const unit = match[2] as "s" | "m" | "h" | "d";
+
+    if (value < 1) {
+      return { error: "Values must be greater than 0." };
+    }
+
+    if (unit === "d" && value > 7) {
+      return { error: "Can't delete messages older than 7 days." };
+    }
+
+    return { seconds: this.calculateToSeconds(value, unit) };
+  }
+
   @SimpleCommand({ name: "ban", description: "Ban a member." })
   async banSC(
     @SimpleCommandOption({ name: "User", type: SimpleCommandOptionType.User })
@@ -74,12 +120,24 @@ export class Ban {
 
     @SimpleCommandOption({
       name: "reason",
+      description: "reason for the ban.",
       type: SimpleCommandOptionType.String,
     })
     reason: string | undefined,
 
+    @SimpleCommandOption({
+      name: "delete_messages",
+      description: "Delete Message History, ie: 7d, 3h, 10m, 5s",
+      type: SimpleCommandOptionType.String,
+    })
+    messages: string | undefined,
     command: SimpleCommandMessage,
   ) {
+    if (!user) {
+      await command.sendUsageSyntax();
+      return;
+    }
+
     const attacker = command.message.member!;
 
     if (!attacker.permissions.has(PermissionsBitField.Flags.BanMembers)) {
@@ -90,7 +148,15 @@ export class Ban {
 
     const finalReason = reason ?? "No reason provided.";
 
-    const result = await this.banMember(attacker, user, finalReason);
+    const parsed = this.parseDuration(messages);
+
+    if ("error" in parsed) {
+      return command.message.reply(`:x: ${parsed.error}`);
+    }
+
+    const seconds = parsed.seconds;
+
+    const result = await this.banMember(attacker, user, finalReason, seconds);
 
     await command.message.reply(this.getMessage(result, user.user.username));
   }
@@ -117,16 +183,34 @@ export class Ban {
     })
     reason: string | undefined,
 
+    @SlashOption({
+      name: "message_delete_duration",
+      description:
+        "Duration of messages to delete, must be within last 7 days. Use format: 7d, 3m, 4s, etc.",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+    })
+    messages: string | undefined,
+
     interaction: CommandInteraction,
   ) {
     if (!interaction.inGuild()) return;
 
     const finalReason = reason ?? "No reason provided.";
 
+    const parsed = this.parseDuration(messages);
+
+    if ("error" in parsed) {
+      return interaction.reply(`:x: ${parsed.error}`);
+    }
+
+    const seconds = parsed.seconds;
+
     const result = await this.banMember(
       interaction.member as GuildMember,
       user,
       finalReason,
+      seconds,
     );
 
     await interaction.reply(this.getMessage(result, user.user.username));

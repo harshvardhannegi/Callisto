@@ -62,6 +62,11 @@ export class Kick {
     user: GuildMember,
     command: SimpleCommandMessage,
   ) {
+    if (!user) {
+      await command.sendUsageSyntax();
+      return;
+    }
+
     const attacker = command.message.member!;
 
     if (!attacker.permissions.has(PermissionsBitField.Flags.KickMembers)) {
